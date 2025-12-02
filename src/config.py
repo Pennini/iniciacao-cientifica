@@ -17,6 +17,7 @@ X_TRAIN_FILE = INTERIM_DATA_DIR / "X_train.csv"
 X_TEST_FILE = INTERIM_DATA_DIR / "X_test.csv"
 Y_TRAIN_FILE = INTERIM_DATA_DIR / "y_train.csv"
 Y_TEST_FILE = INTERIM_DATA_DIR / "y_test.csv"
+DF_VOL_FILE = INTERIM_DATA_DIR / "df_vol.csv"
 
 MODELS_SCR_DIR = SRC_DIR / "models"
 HAR_MODELING_FILE = MODELS_SCR_DIR / "har.py"
@@ -29,6 +30,8 @@ PATCHTST_PRED_FILE = PROCESSED_DATA_DIR / "patchtst_predictions.csv"
 
 HAR_METRICS_FILE = PROCESSED_DATA_DIR / "har_metrics.csv"
 PATCHTST_METRICS_FILE = PROCESSED_DATA_DIR / "patchtst_metrics.csv"
+
+FEATURES = ['Vol_lag_1', 'Vol_week_mean', 'Vol_month_mean']
 
 def ensure_directories():
     for dir in [DATA_DIR, MODEL_DIR, LOGS_DIR, RAW_DATA_DIR, PROCESSED_DATA_DIR]:

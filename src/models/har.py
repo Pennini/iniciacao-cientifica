@@ -21,6 +21,7 @@ from config import (
 from config import (
     HAR_PRED_FILE,
     HAR_METRICS_FILE,
+    FEATURES
 )
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
@@ -29,9 +30,9 @@ class HarModel():
         self.model = LinearRegression()
 
     def carregar_dados(self):
-        self.X_train = pd.read_csv(X_TRAIN_FILE)
+        self.X_train = pd.read_csv(X_TRAIN_FILE)[FEATURES]
         self.y_train = pd.read_csv(Y_TRAIN_FILE).values.ravel()
-        self.X_test = pd.read_csv(X_TEST_FILE)
+        self.X_test = pd.read_csv(X_TEST_FILE)[FEATURES]
         self.y_test = pd.read_csv(Y_TEST_FILE).values.ravel()
 
     def train(self, X_train, y_train):

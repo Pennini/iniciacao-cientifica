@@ -4,6 +4,7 @@ from typing import Tuple
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 
 from config import (
     BTC_DATA_FILE,
@@ -11,6 +12,8 @@ from config import (
     X_TEST_FILE,
     Y_TRAIN_FILE,
     Y_TEST_FILE,
+    DF_VOL_FILE,
+    FEATURES
 )
 
 # Constantes
@@ -18,9 +21,6 @@ WINDOW_WEEKLY = 5
 WINDOW_MONTHLY = 22
 TEST_SIZE = 0.3
 RANDOM_STATE = 42
-
-# Feautures para o modelo
-FEATURES = ['Vol_lag_1', 'Vol_week_mean', 'Vol_month_mean']
 
 
 def load_and_prepare_data(file_path: str) -> pd.DataFrame:
@@ -80,6 +80,24 @@ def calculate_features(df: pd.DataFrame) -> pd.DataFrame:
     
     return df_vol
 
+def normalize_features(X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+    """
+    Normaliza features.
+    Args:
+        df_vol: DataFrame com features
+    Returns:
+        DataFrame com features normalizadas
+    """
+    print("Normalizando features")
+    scaler_x = StandardScaler()
+    scaler_y = StandardScaler()
+    
+    X_train_scaled = scaler_x.fit_transform(X_train)
+    X_test_scaled = scaler_x.transform(X_test)
+    y_train_scaled = scaler_y.fit_transform(y_train.values.reshape(-1, 1)).flatten()
+    y_test_scaled = scaler_y.transform(y_test.values.reshape(-1, 1)).flatten()
+    
+    return pd.DataFrame(X_train_scaled, columns=FEATURES, index=X_train.index), pd.DataFrame(X_test_scaled, columns=FEATURES, index=X_test.index), pd.Series(y_train_scaled), pd.Series(y_test_scaled)
 
 def prepare_train_test_split(df_vol: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
     """
@@ -104,17 +122,18 @@ def prepare_train_test_split(df_vol: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Dat
         test_size=TEST_SIZE, 
         random_state=RANDOM_STATE
     )
+
+    # X_train, X_test, y_train, y_test = normalize_features(X_train, X_test, y_train, y_test)
+    
+    X_train.index.name = 'tempo'
+    X_test.index.name = 'tempo'
     
     print(f"Treino: {len(X_train)} | Teste: {len(X_test)}")
     
     return X_train, X_test, y_train, y_test
 
-
 def save_datasets(
-    X_train: pd.DataFrame, 
-    X_test: pd.DataFrame, 
-    y_train: pd.Series, 
-    y_test: pd.Series
+    *kwargs
 ) -> None:
     """
     Salva datasets em arquivos CSV.
@@ -124,13 +143,8 @@ def save_datasets(
     """
     print("Salvando datasets")
 
-    X_train.index.name = 'tempo'
-    X_test.index.name = 'tempo'
-
-    X_train.to_csv(X_TRAIN_FILE, index=True)
-    X_test.to_csv(X_TEST_FILE, index=True)
-    y_train.to_csv(Y_TRAIN_FILE, index=False)
-    y_test.to_csv(Y_TEST_FILE, index=False)
+    for data, (path, idx) in kwargs:
+        data.to_csv(path, index=idx)
     
     print("Datasets salvos com sucesso")
 
@@ -143,7 +157,16 @@ def train_test_split_data() -> None:
         df = load_and_prepare_data(BTC_DATA_FILE)
         df_vol = calculate_features(df)
         X_train, X_test, y_train, y_test = prepare_train_test_split(df_vol)
-        save_datasets(X_train, X_test, y_train, y_test)
+
+        datasets = [
+            (X_train, (X_TRAIN_FILE, True)),
+            (X_test, (X_TEST_FILE, True)),
+            (y_train, (Y_TRAIN_FILE, False)),
+            (y_test, (Y_TEST_FILE, False)),
+            (df_vol, (DF_VOL_FILE, True))
+        ]
+
+        save_datasets(*datasets)
         
         print("Pipeline concluído com sucesso")
         
