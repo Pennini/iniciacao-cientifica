@@ -44,8 +44,9 @@ class HarModel():
     def evaluate(self, y_true, y_pred):
         mse = mean_squared_error(y_true, y_pred)
         mae = mean_absolute_error(y_true, y_pred)
+        rmse = np.sqrt(mse)
         r2 = r2_score(y_true, y_pred)
-        return mse, mae, r2
+        return mse, mae, rmse, r2
     
     def salvar_resultados(self, y_true, y_pred):
         df_results = pd.DataFrame(
@@ -56,11 +57,16 @@ class HarModel():
         )
         df_results.to_csv(HAR_PRED_FILE, index=False)
         print(f"Previsões salvas em: {HAR_PRED_FILE}")
+
+        mse, mae, rmse, r2 = self.evaluate(y_true, y_pred)
+
         metrics = {
-            "MSE": mean_squared_error(y_true, y_pred),
-            "MAE": mean_absolute_error(y_true, y_pred),
-            "R2": r2_score(y_true, y_pred),
+            "MSE": mse,
+            "MAE": mae,
+            "RMSE": rmse,
+            "R2": r2,
         }
+
         df_metrics = pd.DataFrame(metrics, index=[0])
         df_metrics.to_csv(HAR_METRICS_FILE, index=False)
         print(f"Métricas salvas em: {HAR_METRICS_FILE}")
@@ -68,18 +74,20 @@ class HarModel():
         return True
     
     def print_evaluation(self, y_train, y_pred_train, y_test, y_pred_test):
-        train_mse, train_mae, train_r2 = self.evaluate(y_train, y_pred_train)
-        test_mse, test_mae, test_r2 = self.evaluate(y_test, y_pred_test)
+        train_mse, train_mae, train_rmse, train_r2 = self.evaluate(y_train, y_pred_train)
+        test_mse, test_mae, test_rmse, test_r2 = self.evaluate(y_test, y_pred_test)
 
         print("\n=== AVALIAÇÃO FINAL - LinearRegression (HAR) ===")
         print("TREINO:")
         print(f"  MSE: {train_mse:.6e}")
         print(f"  MAE: {train_mae:.6e}")
+        print(f"  RMSE: {train_rmse:.6e}")
         print(f"  R²:  {train_r2:.6e}")
 
         print("\nTESTE:")
         print(f"  MSE: {test_mse:.6e}")
         print(f"  MAE: {test_mae:.6e}")
+        print(f"  RMSE: {test_rmse:.6e}")
         print(f"  R²:  {test_r2:.6e}")
         print("=" * 40)
     
