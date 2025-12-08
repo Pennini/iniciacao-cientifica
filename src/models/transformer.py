@@ -14,24 +14,38 @@ import sys
 RANDOM_STATE = 42
 torch.manual_seed(RANDOM_STATE)
 
-# Adiciona o diretório raiz ao path
+# Adiciona o diretório `src` ao path para permitir `import config`
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config.config import (
+# Importar variáveis do módulo `src/config.py` (importa-se como `config`)
+from config import (
     X_TRAIN_FILE,
     X_TEST_FILE,
     Y_TRAIN_FILE,
     Y_TEST_FILE,
+    PROCESSED_DATA_DIR,
+    ensure_directories,
 )
-
-from config.config import RESULTS_DATA_DIR
 
 # ==================== 1. Carregar dados ====================
 print("Carregando dados...")
-X_train = pd.read_csv(str(X_TRAIN_FILE)).values.tolist()
-X_test = pd.read_csv(str(X_TEST_FILE)).values.tolist()
-y_train = pd.read_csv(str(Y_TRAIN_FILE)).values.flatten().tolist()
-y_test = pd.read_csv(str(Y_TEST_FILE)).values.flatten().tolist()
+# Ler como DataFrame e remover coluna de tempo (se presente)
+df_X_train = pd.read_csv(str(X_TRAIN_FILE))
+if "tempo" in df_X_train.columns:
+    df_X_train = df_X_train.drop(columns=["tempo"])
+df_X_test = pd.read_csv(str(X_TEST_FILE))
+if "tempo" in df_X_test.columns:
+    df_X_test = df_X_test.drop(columns=["tempo"])
+
+# Ler targets
+df_y_train = pd.read_csv(str(Y_TRAIN_FILE))
+df_y_test = pd.read_csv(str(Y_TEST_FILE))
+
+# Converter para listas de floats
+X_train = df_X_train.values.astype("float32").tolist()
+X_test = df_X_test.values.astype("float32").tolist()
+y_train = df_y_train.values.flatten().astype("float32").tolist()
+y_test = df_y_test.values.flatten().astype("float32").tolist()
 
 # Converter para tensores PyTorch
 X_train = torch.tensor(X_train, dtype=torch.float32)
@@ -92,11 +106,6 @@ train_loader = DataLoader(
     shuffle=True,
     generator=torch.Generator().manual_seed(RANDOM_STATE),
 )
-BATCH_SIZE = 32
-train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
-test_dataset = TensorDataset(X_test_tensor, y_test_tensor)
-
-train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
 # ==================== 5. Configuração do modelo ====================
@@ -123,7 +132,7 @@ print(f"Total de parâmetros: {sum(p.numel() for p in model.parameters()):,}")
 # Garantir diretórios necessários
 ensure_directories()
 # Diretório para salvar/carregar modelos em data/models
-data_models_dir = RESULTS_DATA_DIR.parent / "models"
+data_models_dir = PROCESSED_DATA_DIR.parent / "models"
 data_models_dir.mkdir(parents=True, exist_ok=True)
 saved_model_path = data_models_dir / "patch_model.pth"
 
@@ -285,7 +294,7 @@ df_test_results = pd.DataFrame(
     }
 )
 
-pred_file = RESULTS_DATA_DIR / "predictions_test.csv"
+pred_file = PROCESSED_DATA_DIR / "predictions_test.csv"
 df_test_results.to_csv(str(pred_file), index=False)
 
 print(f"Previsões salvas em: {pred_file}")
