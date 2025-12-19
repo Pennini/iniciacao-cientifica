@@ -41,7 +41,7 @@ def load_and_prepare_data(file_path: str) -> pd.DataFrame:
     
     print(f"Carregando dados de {file_path}")
     df = pd.read_csv(file_path, sep=';')
-    df['tempo'] = pd.to_datetime(df['tempo'], format='mixed')
+    df['timestamp'] = pd.to_datetime(df['timestamp'], format='mixed')
     
     return df
 
@@ -63,7 +63,7 @@ def calculate_features(df: pd.DataFrame) -> pd.DataFrame:
     df['squared_log_returns'] = df['log_returns'] ** 2
     
     # Agrupa por dia
-    df_indexed = df.set_index('tempo')
+    df_indexed = df.set_index('timestamp')
     daily_realized_variance = df_indexed.groupby(df_indexed.index.date)['squared_log_returns'].sum()
     
     # Cria features de volatilidade
@@ -111,11 +111,15 @@ def prepare_train_test_split(df_vol: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Dat
     """
     print("Preparando split treino/teste")
     
-    df_clean = df_vol.dropna().copy()
-    print(f"Removidas {len(df_vol) - len(df_clean)} linhas com valores faltantes")
+    df_clean = df_vol.copy()
     
     X = df_clean[FEATURES]
     y = df_clean['Vol']
+
+    print(f"X: {len(X)} registros antes da limpeza")
+    print(f"y: {len(y)} registros antes da limpeza")
+
+    print(X, y)
     
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, 
@@ -123,11 +127,9 @@ def prepare_train_test_split(df_vol: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Dat
         random_state=RANDOM_STATE
     )
 
-    # X_train, X_test, y_train, y_test = normalize_features(X_train, X_test, y_train, y_test)
-    
-    X_train.index.name = 'tempo'
-    X_test.index.name = 'tempo'
-    
+    X_train.index.name = 'timestamp'
+    X_test.index.name = 'timestamp'
+
     print(f"Treino: {len(X_train)} | Teste: {len(X_test)}")
     
     return X_train, X_test, y_train, y_test

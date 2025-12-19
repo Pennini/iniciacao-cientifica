@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
+import matplotlib.pyplot as plt
 
 from pathlib import Path
 import sys
@@ -45,8 +46,19 @@ class HarModel():
         mse = mean_squared_error(y_true, y_pred)
         mae = mean_absolute_error(y_true, y_pred)
         rmse = np.sqrt(mse)
-        r2 = r2_score(y_true, y_pred)
-        return mse, mae, rmse, r2
+        mape = np.mean(np.abs((y_true - y_pred) / (np.abs(y_true) + 1e-9))) * 100
+        return mse, mae, rmse, mape
+
+    def visualize_predictions(self, y_true, y_pred):
+        plt.figure(figsize=(10, 6))
+        plt.plot(y_true, label="True Values", color="blue")
+        plt.plot(y_pred, label="Predicted Values", color="red", linestyle="--")
+        plt.title("HAR: True vs Predicted Values")
+        plt.xlabel("Samples")
+        plt.ylabel("Target Value")
+        plt.legend()
+        plt.grid()
+        plt.show()
     
     def salvar_resultados(self, y_true, y_pred):
         df_results = pd.DataFrame(
@@ -58,13 +70,13 @@ class HarModel():
         df_results.to_csv(HAR_PRED_FILE, index=False)
         print(f"Previsões salvas em: {HAR_PRED_FILE}")
 
-        mse, mae, rmse, r2 = self.evaluate(y_true, y_pred)
+        mse, mae, rmse, mape = self.evaluate(y_true, y_pred)
 
         metrics = {
             "MSE": mse,
             "MAE": mae,
             "RMSE": rmse,
-            "R2": r2,
+            "MAPE": mape,
         }
 
         df_metrics = pd.DataFrame(metrics, index=[0])
@@ -73,23 +85,27 @@ class HarModel():
 
         return True
     
-    def print_evaluation(self, y_train, y_pred_train, y_test, y_pred_test):
-        train_mse, train_mae, train_rmse, train_r2 = self.evaluate(y_train, y_pred_train)
-        test_mse, test_mae, test_rmse, test_r2 = self.evaluate(y_test, y_pred_test)
+    def evaluate_and_visualize(self, y_train, y_pred_train, y_test, y_pred_test):
+        train_mse, train_mae, train_rmse, train_mape = self.evaluate(y_train, y_pred_train)
+        test_mse, test_mae, test_rmse, test_mape = self.evaluate(y_test, y_pred_test)
 
         print("\n=== AVALIAÇÃO FINAL - LinearRegression (HAR) ===")
         print("TREINO:")
         print(f"  MSE: {train_mse:.6e}")
         print(f"  MAE: {train_mae:.6e}")
         print(f"  RMSE: {train_rmse:.6e}")
-        print(f"  R²:  {train_r2:.6e}")
+        print(f"  MAPE:  {train_mape:.6e}")
 
         print("\nTESTE:")
         print(f"  MSE: {test_mse:.6e}")
         print(f"  MAE: {test_mae:.6e}")
         print(f"  RMSE: {test_rmse:.6e}")
-        print(f"  R²:  {test_r2:.6e}")
+        print(f"  MAPE:  {test_mape:.6e}")
         print("=" * 40)
+
+        print("\nVisualizando previsões no conjunto de teste...")
+
+        self.visualize_predictions(y_test, y_pred_test)
     
     def main(self, verbose=True):
         self.carregar_dados()
@@ -98,7 +114,7 @@ class HarModel():
         y_pred_test = self.predict(self.X_test)
         
         if verbose:
-            self.print_evaluation(self.y_train, y_pred_train, self.y_test, y_pred_test)
+            self.evaluate_and_visualize(self.y_train, y_pred_train, self.y_test, y_pred_test)
         self.salvar_resultados(self.y_test, y_pred_test)
 
         return True
