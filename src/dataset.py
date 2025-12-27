@@ -1,16 +1,17 @@
 from pathlib import Path
-from typing import Tuple
 
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 
 from config import (
     BTC_DATA_FILE,
     X_TRAIN_FILE,
+    X_VAL_FILE,
     X_TEST_FILE,
     Y_TRAIN_FILE,
+    Y_VAL_FILE,
     Y_TEST_FILE,
     DF_VOL_FILE,
     FEATURES
@@ -19,9 +20,8 @@ from config import (
 # Constantes
 WINDOW_WEEKLY = 5
 WINDOW_MONTHLY = 22
-TEST_SIZE = 0.3
-RANDOM_STATE = 42
-
+TRAIN_SIZE = 0.7
+VALID_SIZE = 0.1
 
 def load_and_prepare_data(file_path: str) -> pd.DataFrame:
     """
@@ -41,12 +41,12 @@ def load_and_prepare_data(file_path: str) -> pd.DataFrame:
     
     print(f"Carregando dados de {file_path}")
     df = pd.read_csv(file_path, sep=';')
-    df['timestamp'] = pd.to_datetime(df['timestamp'], format='mixed')
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms', errors='raise')
     
     return df
 
 
-def calculate_features(df: pd.DataFrame) -> pd.DataFrame:
+def calculate_features(df: pd.DataFrame, usa_features: bool = True) -> pd.DataFrame:
     """
     Calcula features de volatilidade para o modelo.
     
@@ -67,72 +67,209 @@ def calculate_features(df: pd.DataFrame) -> pd.DataFrame:
     daily_realized_variance = df_indexed.groupby(df_indexed.index.date)['squared_log_returns'].sum()
     
     # Cria features de volatilidade
-    df_vol = pd.DataFrame({'Vol': daily_realized_variance})
-    df_vol['Vol_lag_1'] = df_vol['Vol'].shift(1)
-    df_vol['Vol_week_mean'] = df_vol['Vol'].rolling(
-        window=WINDOW_WEEKLY, 
-        min_periods=1
-    ).mean().shift(1)
-    df_vol['Vol_month_mean'] = df_vol['Vol'].rolling(
-        window=WINDOW_MONTHLY, 
-        min_periods=1
-    ).mean().shift(1)
+    df_vol = daily_realized_variance.to_frame(name='Vol')
+
+    if usa_features:
+        df_vol['Vol_lag_1'] = df_vol['Vol'].shift(1)
+
+        df_vol['Vol_week_mean'] = df_vol['Vol'].rolling(
+            window=WINDOW_WEEKLY, 
+            min_periods=1
+        ).mean().shift(1)
+
+        df_vol['Vol_month_mean'] = df_vol['Vol'].rolling(
+            window=WINDOW_MONTHLY, 
+            min_periods=1
+        ).mean().shift(1)
     
+    df_vol = df_vol.dropna()
+    df_vol.index.name = 'date'
+    df_vol.index = pd.to_datetime(df_vol.index)
+
     return df_vol
 
-def normalize_features(X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+def temporal_train_test_split(
+    df,
+    date_col,
+    features,
+    target,
+    train_size=TRAIN_SIZE,
+    val_size=VALID_SIZE,
+    use_val=True
+):
     """
-    Normaliza features.
-    Args:
-        df_vol: DataFrame com features
-    Returns:
-        DataFrame com features normalizadas
+    Split temporal por proporção.
     """
-    print("Normalizando features")
-    scaler_x = StandardScaler()
-    scaler_y = StandardScaler()
-    
-    X_train_scaled = scaler_x.fit_transform(X_train)
-    X_test_scaled = scaler_x.transform(X_test)
-    y_train_scaled = scaler_y.fit_transform(y_train.values.reshape(-1, 1)).flatten()
-    y_test_scaled = scaler_y.transform(y_test.values.reshape(-1, 1)).flatten()
-    
-    return pd.DataFrame(X_train_scaled, columns=FEATURES, index=X_train.index), pd.DataFrame(X_test_scaled, columns=FEATURES, index=X_test.index), pd.Series(y_train_scaled), pd.Series(y_test_scaled)
 
-def prepare_train_test_split(df_vol: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+    df = df.sort_values(date_col)
+
+    n = len(df)
+    train_end = int(n * train_size)
+
+    if use_val:
+        val_end = int(n * (train_size + val_size))
+
+        train = df.iloc[:train_end]
+        val   = df.iloc[train_end:val_end]
+        test  = df.iloc[val_end:]
+
+        X_train, y_train = train[features], train[target]
+        X_val, y_val     = val[features], val[target]
+        X_test, y_test   = test[features], test[target]
+
+        return X_train, X_val, X_test, y_train, y_val, y_test
+
+    else:
+        train = df.iloc[:train_end]
+        test  = df.iloc[train_end:]
+
+        X_train, y_train = train[features], train[target]
+        X_test, y_test   = test[features], test[target]
+
+        return X_train, X_test, y_train, y_test
+
+
+def temporal_split_by_date(
+    df,
+    date_col,
+    features,
+    target,
+    train_end,
+    val_end=None
+):
     """
-    Realiza split treino/teste com limpeza de dados.
-    
-    Args:
-        df_vol: DataFrame com features
+    Split temporal por data.
+    """
+
+    df = df.sort_values(date_col)
+
+    if val_end is not None:
+        train = df[df[date_col] <= train_end]
+        val   = df[(df[date_col] > train_end) & (df[date_col] <= val_end)]
+        test  = df[df[date_col] > val_end]
+
+        X_train, y_train = train[features], train[target]
+        X_val, y_val     = val[features], val[target]
+        X_test, y_test   = test[features], test[target]
+
+        return X_train, X_val, X_test, y_train, y_val, y_test
+
+    else:
+        train = df[df[date_col] <= train_end]
+        test  = df[df[date_col] > train_end]
+
+        X_train, y_train = train[features], train[target]
+        X_test, y_test   = test[features], test[target]
+
+        return X_train, X_test, y_train, y_test
+
+def normalize_time_series(
+    X_train,
+    y_train,
+    X_val=None,
+    y_val=None,
+    X_test=None,
+    y_test=None,
+    method="standard",
+    normalize_y=False
+):
+    """
+    Normalização segura para séries temporais (fit apenas no treino).
+    """
+
+    # Escolha do scaler
+    if method == "standard":
+        scaler_X = StandardScaler()
+        scaler_y = StandardScaler()
+    elif method == "minmax":
+        scaler_X = MinMaxScaler()
+        scaler_y = MinMaxScaler()
+    elif method == "robust":
+        scaler_X = RobustScaler()
+        scaler_y = RobustScaler()
+    else:
+        raise ValueError("method deve ser: 'standard', 'minmax' ou 'robust'")
+
+    # Fit SOMENTE no treino
+    scaler_X.fit(X_train)
+
+    X_train_scaled = scaler_X.transform(X_train)
+    X_val_scaled   = scaler_X.transform(X_val) if X_val is not None else None
+    X_test_scaled  = scaler_X.transform(X_test) if X_test is not None else None
+
+    if normalize_y:
+        y_train = y_train.values.reshape(-1, 1)
+        scaler_y.fit(y_train)
+
+        y_train_scaled = scaler_y.transform(y_train).ravel()
+        y_val_scaled   = (
+            scaler_y.transform(y_val.values.reshape(-1, 1)).ravel()
+            if y_val is not None else None
+        )
+        y_test_scaled  = (
+            scaler_y.transform(y_test.values.reshape(-1, 1)).ravel()
+            if y_test is not None else None
+        )
+    else:
+        scaler_y = None
+        y_train_scaled = y_train
+        y_val_scaled   = y_val
+        y_test_scaled  = y_test
+
+    return {
+        "X_train": X_train_scaled,
+        "X_val": X_val_scaled,
+        "X_test": X_test_scaled,
+        "y_train": y_train_scaled,
+        "y_val": y_val_scaled,
+        "y_test": y_test_scaled,
+        "scaler_X": scaler_X,
+        "scaler_y": scaler_y
+    }
+
+
+def resumo_periodo(
+    df,
+    date_col="date",
+    nome="Dataset"
+):
+    """
+    Exibe um resumo claro do período temporal de um DataFrame.
+
+    Parâmetros
+    ----------
+    df : pd.DataFrame
+        DataFrame contendo a coluna de datas.
+    date_col : str
+        Nome da coluna de datas.
+    nome : str
+        Nome do conjunto (ex: 'Treino', 'Validação', 'Teste').
+
+    Retorno
+    -------
+    dict com informações do período (útil para logs)
+    """
+    try:
+        datas = pd.to_datetime(df[date_col])
+    except KeyError:
+        datas = pd.to_datetime(df.index)
         
-    Returns:
-        Tupla com (X_train, X_test, y_train, y_test)
-    """
-    print("Preparando split treino/teste")
-    
-    df_clean = df_vol.copy()
-    
-    X = df_clean[FEATURES]
-    y = df_clean['Vol']
+    inicio = datas.min()
+    fim = datas.max()
 
-    print(f"X: {len(X)} registros antes da limpeza")
-    print(f"y: {len(y)} registros antes da limpeza")
+    delta = fim - inicio
+    anos = delta.days // 365
+    dias_restantes = delta.days % 365
 
-    print(X, y)
-    
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, 
-        test_size=TEST_SIZE, 
-        random_state=RANDOM_STATE
+    print(
+        f"📅 {nome}\n"
+        f"   Início : {inicio:%d/%m/%Y}\n"
+        f"   Fim    : {fim:%d/%m/%Y}\n"
+        f"   Duração: {anos} anos e {dias_restantes} dias "
+        f"({delta.days} dias no total)\n"
     )
 
-    X_train.index.name = 'timestamp'
-    X_test.index.name = 'timestamp'
 
-    print(f"Treino: {len(X_train)} | Teste: {len(X_test)}")
-    
-    return X_train, X_test, y_train, y_test
 
 def save_datasets(
     *kwargs
@@ -151,14 +288,33 @@ def save_datasets(
     print("Datasets salvos com sucesso")
 
 
-def train_test_split_data() -> None:
+def prepare_data_features(use_val=True) -> None:
     """
     Orquestra o pipeline completo de preparação de dados.
     """
     try:
         df = load_and_prepare_data(BTC_DATA_FILE)
         df_vol = calculate_features(df)
-        X_train, X_test, y_train, y_test = prepare_train_test_split(df_vol)
+        
+        if use_val:
+            X_train, X_val, X_test, y_train, y_val, y_test = temporal_train_test_split(
+                df_vol,
+                date_col='date',
+                features=FEATURES,
+                target='Vol',
+                train_size=TRAIN_SIZE,
+                val_size=VALID_SIZE,
+                use_val=True
+            )
+        else:
+            X_train, X_test, y_train, y_test = temporal_train_test_split(
+                df_vol,
+                date_col='date',
+                features=FEATURES,
+                target='Vol',
+                train_size=TRAIN_SIZE,
+                use_val=False
+            )
 
         datasets = [
             (X_train, (X_TRAIN_FILE, True)),
@@ -168,6 +324,14 @@ def train_test_split_data() -> None:
             (df_vol, (DF_VOL_FILE, True))
         ]
 
+        if use_val:
+            datasets += [(X_val, (X_VAL_FILE, True)), (y_val, (Y_VAL_FILE, False))]
+
+        for data, (nome, _) in datasets:
+            nome_arrumado = nome.name
+            if "X" in nome_arrumado:
+                resumo_periodo(data, nome=nome_arrumado)
+
         save_datasets(*datasets)
         
         print("Pipeline concluído com sucesso")
@@ -176,6 +340,52 @@ def train_test_split_data() -> None:
         print(f"Erro ao processar dados: {e}")
         raise
 
+def prepare_data_vol_diaria(use_val=True):
+    df = load_and_prepare_data(BTC_DATA_FILE)
+    df_vol = calculate_features(df, usa_features=False)
+
+    if use_val:
+        X_train, X_val, X_test, y_train, y_val, y_test = temporal_train_test_split(
+            df_vol,
+            date_col='date',
+            features=['Vol'],
+            target='Vol',
+            train_size=TRAIN_SIZE,
+            val_size=VALID_SIZE,
+            use_val=True
+        )
+    else:
+        X_train, X_test, y_train, y_test = temporal_train_test_split(
+            df_vol,
+            date_col='date',
+            features=['Vol'],
+            target='Vol',
+            train_size=TRAIN_SIZE,
+            use_val=False
+        )
+    
+    datasets = [
+        (X_train, (X_TRAIN_FILE, True)),
+        (X_test, (X_TEST_FILE, True)),
+        (y_train, (Y_TRAIN_FILE, False)),
+        (y_test, (Y_TEST_FILE, False)),
+        (df_vol, (DF_VOL_FILE, True))
+    ]
+
+    if use_val:
+        datasets += [(X_val, (X_VAL_FILE, True)), (y_val, (Y_VAL_FILE, False))]
+    
+    for idx in range(len(datasets)):
+        data, (nome, tem) = datasets[idx]
+        nome_arrumado = nome.name.split(".")[0] + "_vol_diaria"
+        datasets[idx] = (data, (Path(nome.parent, nome_arrumado), tem))
+        if "X" in nome_arrumado:
+            resumo_periodo(data, nome=nome_arrumado)
+    
+    save_datasets(*datasets)
+
+    print("Pipeline de dados apenas com volatilidade diária concluído com sucesso")
 
 if __name__ == "__main__":
-    train_test_split_data()
+    prepare_data_features()
+    prepare_data_vol_diaria()
