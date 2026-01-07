@@ -269,6 +269,15 @@ def resumo_periodo(
         f"({delta.days} dias no total)\n"
     )
 
+    infos = {
+        "anos": anos,
+        "dias_restantes": dias_restantes,
+        "total_dias": delta.days,
+        "inicio": inicio,
+        "fim": fim
+    }
+
+    return infos
 
 
 def save_datasets(

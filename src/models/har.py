@@ -49,16 +49,18 @@ class HarModel():
         mape = np.mean(np.abs((y_true - y_pred) / (np.abs(y_true) + 1e-9))) * 100
         return mse, mae, rmse, mape
 
-    def visualize_predictions(self, y_true, y_pred):
-        plt.figure(figsize=(10, 6))
-        plt.plot(y_true, label="True Values", color="blue")
-        plt.plot(y_pred, label="Predicted Values", color="red", linestyle="--")
+    def visualize_predictions(self, dates, y_true, y_pred):
+        plt.figure(figsize=(12, 6))
+        plt.plot(dates, y_true, label="True Values", color="blue")
+        plt.plot(dates, y_pred, label="Predicted Values", color="red", linestyle="--")
         plt.title("HAR: True vs Predicted Values")
-        plt.xlabel("Samples")
+        plt.xlabel("Date")
         plt.ylabel("Target Value")
         plt.legend()
         plt.grid()
+        plt.tight_layout()
         plt.show()
+
     
     def salvar_resultados(self, y_true, y_pred):
         df_results = pd.DataFrame(
@@ -85,7 +87,12 @@ class HarModel():
 
         return True
     
-    def evaluate_and_visualize(self, y_train, y_pred_train, y_test, y_pred_test):
+    def evaluate_and_visualize(
+        self,
+        y_train, y_pred_train,
+        y_test, y_pred_test,
+        test_dates=None
+    ):
         train_mse, train_mae, train_rmse, train_mape = self.evaluate(y_train, y_pred_train)
         test_mse, test_mae, test_rmse, test_mape = self.evaluate(y_test, y_pred_test)
 
@@ -94,18 +101,19 @@ class HarModel():
         print(f"  MSE: {train_mse:.6e}")
         print(f"  MAE: {train_mae:.6e}")
         print(f"  RMSE: {train_rmse:.6e}")
-        print(f"  MAPE:  {train_mape:.6e}")
+        print(f"  MAPE: {train_mape:.6e}")
 
         print("\nTESTE:")
         print(f"  MSE: {test_mse:.6e}")
         print(f"  MAE: {test_mae:.6e}")
         print(f"  RMSE: {test_rmse:.6e}")
-        print(f"  MAPE:  {test_mape:.6e}")
+        print(f"  MAPE: {test_mape:.6e}")
         print("=" * 40)
 
-        print("\nVisualizando previsões no conjunto de teste...")
+        if test_dates is not None:
+            print("\nVisualizando previsões no conjunto de teste...")
+            self.visualize_predictions(test_dates, y_test, y_pred_test)
 
-        self.visualize_predictions(y_test, y_pred_test)
     
     def main(self, verbose=True):
         self.carregar_dados()
