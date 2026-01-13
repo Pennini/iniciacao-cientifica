@@ -33,7 +33,22 @@ PATCHTST_PRED_FILE = PROCESSED_DATA_DIR / "patchtst_predictions.csv"
 HAR_METRICS_FILE = PROCESSED_DATA_DIR / "har_metrics.csv"
 PATCHTST_METRICS_FILE = PROCESSED_DATA_DIR / "patchtst_metrics.csv"
 
-FEATURES = ['Vol_lag_1', 'Vol_week_mean', 'Vol_month_mean']
+TIMESTAMP_COLUMN = 'date'
+TARGET_COLUMN = ['Vol']
+FEATURES = ["Vol_lag_1", "Vol_week_mean", "Vol_month_mean"]
+ID_COLUMNS = []
+
+CONTEXT_LENGTH_IBM = 512
+FORECAST_HORIZON_IBM = 96
+
+TRAIN_FRAC, VALID_FRAC = 0.7, 0.1
+
+# Hyperparâmetros do modelo
+PATCH_LENGTH = 1
+BATCH_SIZE = 32
+NUM_WORKERS = 0
+EPOCHS = 50
+LEARNING_RATE = 1e-4
 
 def ensure_directories():
     for dir in [DATA_DIR, MODEL_DIR, LOGS_DIR, RAW_DATA_DIR, PROCESSED_DATA_DIR]:

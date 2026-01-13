@@ -30,6 +30,20 @@ class HarModel():
     def __init__(self) -> None:
         self.model = LinearRegression()
 
+    def executar(self, X_train, y_train, X_test, y_test, test_dates):
+        self.train(X_train, y_train)
+
+        y_pred_train = self.predict(X_train)
+        y_pred_test  = self.predict(X_test)
+
+        self.evaluate_and_visualize(
+            y_train, y_pred_train,
+            y_test, y_pred_test,
+            test_dates=test_dates
+        )
+
+        return y_pred_test
+
     def carregar_dados(self):
         self.X_train = pd.read_csv(X_TRAIN_FILE)[FEATURES]
         self.y_train = pd.read_csv(Y_TRAIN_FILE).values.ravel()
