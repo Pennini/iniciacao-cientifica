@@ -20,7 +20,7 @@ class RepositorioDados:
         Orquestra o pipeline completo de preparação de dados.
         """
         try:
-            df = self.load_and_prepare_data(BTC_DATA_FILE, 'timestamp')
+            df = self.load_and_prepare_data(BTC_DATA_FILE, timestamp_col)
             df_vol = self.calculate_features(df)
 
             train_df, valid_df, test_df = self.train_valid_test_split(
@@ -110,6 +110,8 @@ class RepositorioDados:
         
         df_vol = df_vol.dropna()
         df_vol.index = pd.to_datetime(df_vol.index)
+        df_vol.reset_index(inplace=True)
+        df_vol.rename(columns={'index': timestamp_col}, inplace=True)
 
         return df_vol
 
@@ -155,7 +157,7 @@ class RepositorioDados:
     def resumo_periodo(
         self,
         df,
-        date_col="date",
+        date_col="timestamp",
         nome="Dataset"
     ):
         """
