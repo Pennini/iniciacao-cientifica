@@ -15,13 +15,13 @@ WINDOW_WEEKLY = 5
 WINDOW_MONTHLY = 22
 
 class RepositorioDados:
-    def executar(self, timestamp_col, train_frac, valid_frac, context_length, features, target, id_cols, forecast_horizon) -> None:
+    def executar(self, timestamp_col, train_frac, valid_frac, context_length, features, target, id_cols, forecast_horizon, use_mean_features=True, lags=1) -> None:
         """
         Orquestra o pipeline completo de preparação de dados.
         """
         try:
             df = self.load_and_prepare_data(BTC_DATA_FILE, timestamp_col)
-            df_vol = self.calculate_features(df)
+            df_vol = self.calculate_features(df, usa_features=use_mean_features, lags=lags, timestamp_col=timestamp_col)
 
             train_df, valid_df, test_df = self.train_valid_test_split(
                 df_vol,
@@ -72,7 +72,8 @@ class RepositorioDados:
         return df
 
 
-    def calculate_features(self, df: pd.DataFrame, usa_features: bool = True, timestamp_col='timestamp') -> pd.DataFrame:
+    def calculate_features(self, df: pd.DataFrame, usa_features: bool = True, timestamp_col='timestamp', use_mean_features: bool = True,
+    lags: int = 1) -> pd.DataFrame:
         """
         Calcula features de volatilidade para o modelo.
         
@@ -96,17 +97,19 @@ class RepositorioDados:
         df_vol = daily_realized_variance.to_frame(name='Vol')
 
         if usa_features:
-            df_vol['Vol_lag_1'] = df_vol['Vol'].shift(1)
+            for lag in range(1, lags + 1):
+                df_vol[f'Vol_lag_{lag}'] = df_vol['Vol'].shift(lag)
 
-            df_vol['Vol_week_mean'] = df_vol['Vol'].rolling(
-                window=WINDOW_WEEKLY, 
-                min_periods=1
-            ).mean().shift(1)
+            if use_mean_features:
+                df_vol['Vol_week_mean'] = df_vol['Vol'].rolling(
+                    window=WINDOW_WEEKLY, 
+                    min_periods=1
+                ).mean().shift(1)
 
-            df_vol['Vol_month_mean'] = df_vol['Vol'].rolling(
-                window=WINDOW_MONTHLY, 
-                min_periods=1
-            ).mean().shift(1)
+                df_vol['Vol_month_mean'] = df_vol['Vol'].rolling(
+                    window=WINDOW_MONTHLY, 
+                    min_periods=1
+                ).mean().shift(1)
         
         df_vol = df_vol.dropna()
         df_vol.index = pd.to_datetime(df_vol.index)
@@ -116,20 +119,27 @@ class RepositorioDados:
         return df_vol
 
     def train_valid_test_split(self, dados, timestamp_col, train_frac, valid_frac, context_length):
+        # Cria uma cópia para evitar modificar dados read-only
+        dados = dados.copy()
         dados.sort_values(by=timestamp_col, inplace=True)
 
         n = len(dados)
         train_end = int(n * train_frac)
         valid_end = int(n * (train_frac + valid_frac))
 
-        train_df = select_by_index(dados, start_index=None, end_index=train_end)
-        valid_df = select_by_index(dados, start_index=train_end - context_length, end_index=valid_end)
-        test_df = select_by_index(dados, start_index=valid_end - context_length, end_index=None)
+        train_df = select_by_index(dados, start_index=None, end_index=train_end).copy()
+        valid_df = select_by_index(dados, start_index=train_end - context_length, end_index=valid_end).copy()
+        test_df = select_by_index(dados, start_index=valid_end - context_length, end_index=None).copy()
 
         return train_df, valid_df, test_df
 
     def normalize_data(self, timestamp_col, target_col, feature_cols, id_cols, context_length, forecast_horizon,
                     train_df, valid_df, test_df):
+        # Reset índices para evitar problemas de alignment
+        train_df = train_df.reset_index(drop=True).copy()
+        valid_df = valid_df.reset_index(drop=True).copy()
+        test_df = test_df.reset_index(drop=True).copy()
+        
         tsp = TimeSeriesPreprocessor(
             timestamp_column=timestamp_col,
             target_column=target_col,
@@ -141,8 +151,9 @@ class RepositorioDados:
 
         def make_ds(df):
             """Cria dataset com janelas deslizantes"""
+            processed = tsp.preprocess(df.copy())  # Cópia para evitar modificações in-place
             return ForecastDFDataset(
-                tsp.preprocess(df),  # Normaliza usando parâmetros do treino
+                processed,
                 id_columns=id_cols,
                 target_columns=target_col,
                 context_length=context_length,      # Quantos dias de histórico usar
