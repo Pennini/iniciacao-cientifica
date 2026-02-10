@@ -23,9 +23,9 @@
       "eval_MSE": 0.05953746289014816,
       "eval_RMSE": 0.244002997707299,
       "eval_loss": 0.032658252865076065,
-      "eval_runtime": 0.3413,
-      "eval_samples_per_second": 471.734,
-      "eval_steps_per_second": 17.58,
+      "eval_runtime": 0.3682,
+      "eval_samples_per_second": 437.22,
+      "eval_steps_per_second": 16.294,
       "step": 37
     }
   ],
