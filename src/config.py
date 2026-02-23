@@ -33,7 +33,7 @@ PATCHTST_PRED_FILE = PROCESSED_DATA_DIR / "patchtst_predictions.csv"
 HAR_METRICS_FILE = PROCESSED_DATA_DIR / "har_metrics.csv"
 PATCHTST_METRICS_FILE = PROCESSED_DATA_DIR / "patchtst_metrics.csv"
 
-TIMESTAMP_COLUMN = 'date'
+TIMESTAMP_COLUMN = 'timestamp'
 TARGET_COLUMN = ['Vol']
 FEATURES = ["Vol_lag_1", "Vol_week_mean", "Vol_month_mean"]
 ID_COLUMNS = []

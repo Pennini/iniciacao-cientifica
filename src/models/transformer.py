@@ -1,12 +1,20 @@
 import numpy as np
+import torch
+import pandas as pd
+from pathlib import Path
+from typing import Dict, Tuple, Optional, Any
 
 from transformers import (
     Trainer,
-    TrainingArguments    
+    TrainingArguments,
+    EarlyStoppingCallback,
+    PatchTSTConfig,
+    PatchTSTForPrediction,
 )
 
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error, mean_absolute_error
+
 
 def compute_metrics(eval_pred):
     pred, labels = eval_pred
@@ -19,24 +27,43 @@ def compute_metrics(eval_pred):
     mse = mean_squared_error(label_1, pred_1)
     mae = mean_absolute_error(label_1, pred_1)
     rmse = np.sqrt(mse)
-    mape = np.mean(
-        np.abs((label_1 - pred_1) / (np.abs(label_1) + 1e-9))
-    ) * 100
+    mape = np.mean(np.abs((label_1 - pred_1) / (np.abs(label_1) + 1e-9))) * 100
 
-    return {
-        "MSE": mse,
-        "MAE": mae,
-        "RMSE": rmse,
-        "MAPE": mape
-    }
+    return {"MSE": mse, "MAE": mae, "RMSE": rmse, "MAPE": mape}
+
+# ============================================================
+# Desnormalização
+# ============================================================
+
+def inverse_transform_targets(tsp, values, target_column):
+
+    scaler = next(iter(tsp.target_scaler_dict.values()))
+
+    mean = scaler.mean_[0]
+    std  = scaler.scale_[0]
+
+    return values * std + mean
+
+
+# ============================================================
+# Avaliação + Plot
+# ============================================================
 
 def evaluate_and_visualize(
     model,
     test_dataset,
     tsp,
     test_df,
+    timestamp_col,
+    target_column,
+    context_length,
     model_name="Modelo"
 ):
+
+    # ============================
+    # Predict
+    # ============================
+
     trainer = Trainer(
         model=model,
         args=TrainingArguments(
@@ -48,43 +75,146 @@ def evaluate_and_visualize(
 
     outputs = trainer.predict(test_dataset)
 
-    preds = outputs.predictions[0] if isinstance(outputs.predictions, tuple) else outputs.predictions
+    preds = outputs.predictions
     labels = outputs.label_ids
 
+    if isinstance(preds, tuple):
+        preds = preds[0]
+
+    preds = np.array(preds)
+    labels = np.array(labels)
+
+    # ============================
+    # Padroniza shape
+    # ============================
+
+    if preds.ndim == 2:
+        preds = preds[..., None]
+        labels = labels[..., None]
+
+    # ============================
     # Desnormalização
-    C = len(tsp.target_columns)
-    scaler = next(iter(tsp.target_scaler_dict.values()))
-    
-    pred_original = scaler.inverse_transform(preds.reshape(-1, C)).reshape(preds.shape)
-    labels_original = scaler.inverse_transform(labels.reshape(-1, C)).reshape(labels.shape)
+    # ============================
 
-    # 1-step ahead
-    preds_1step = pred_original[:, 0, 0]
-    labels_1step = labels_original[:, 0, 0]
+    preds_real = inverse_transform_targets(tsp, preds, target_column)
+    labels_real = inverse_transform_targets(tsp, labels, target_column)
 
-    # Datas corretas
-    test_dates = test_df[TIMESTAMP_COLUMN].values
-    forecast_dates = test_dates[CONTEXT_LENGTH : CONTEXT_LENGTH + len(preds_1step)]
+    # ============================
+    # 1-step
+    # ============================
 
-    # Métricas finais (fora do Trainer)
+    preds_1 = preds_real[:, 0, 0]
+    labels_1 = labels_real[:, 0, 0]
+
+    # ============================
+    # Datas
+    # ============================
+
+    dates = test_df[timestamp_col].values
+    forecast_dates = dates[context_length : context_length + len(preds_1)]
+
+    # ============================
+    # Métricas
+    # ============================
+
     metrics = {
-        "MSE": mean_squared_error(labels_1step, preds_1step),
-        "MAE": mean_absolute_error(labels_1step, preds_1step),
-        "RMSE": np.sqrt(mean_squared_error(labels_1step, preds_1step)),
-        "MAPE": np.mean(np.abs((labels_1step - preds_1step) / (np.abs(labels_1step) + 1e-9))) * 100
+        "MSE": mean_squared_error(labels_1, preds_1),
+        "MAE": mean_absolute_error(labels_1, preds_1),
+        "RMSE": np.sqrt(mean_squared_error(labels_1, preds_1)),
+        "MAPE": np.mean(
+            np.abs((labels_1 - preds_1) /
+            (np.abs(labels_1) + 1e-8))
+        ) * 100
     }
 
-    print(f"=== AVALIAÇÃO FINAL – {model_name} ===\n")
+    print(f"\n=== {model_name} ===")
     for k, v in metrics.items():
         print(f"{k}: {v:.6e}")
 
+    # ============================
+    # Plot
+    # ============================
+
     plt.figure(figsize=(12, 6))
-    plt.plot(forecast_dates, labels_1step, label="True", color="blue")
-    plt.plot(forecast_dates, preds_1step, label="Predicted", linestyle="--", color="red")
-    plt.title(f"{model_name} – True vs Predicted Volatility")
+    plt.plot(forecast_dates, labels_1, label="True", color='blue')
+    plt.plot(forecast_dates, preds_1, "--", label="Predicted", color='red')
+    plt.title(f"{model_name} – True vs Predicted")
+    plt.xlabel("Time")
+    plt.ylabel(str(target_column))
     plt.legend()
     plt.grid()
     plt.tight_layout()
     plt.show()
 
     return forecast_dates, metrics
+
+
+def train_and_evaluate_patchtst(
+    train_dataset,
+) -> Dict[str, Any]:
+    """
+    Função geral para treinar, avaliar e visualizar um modelo PatchTST.
+
+    Parâmetros:
+    -----------
+    train_dataset : ForecastDFDataset
+        Dataset de treinamento
+    valid_dataset : ForecastDFDataset
+        Dataset de validação
+    test_dataset : ForecastDFDataset
+        Dataset de teste
+    test_df : pd.DataFrame
+        DataFrame de teste com coluna de timestamp
+    tsp : TimeSeriesPreprocessor
+        Preprocessador para desnormalização
+    model_config : dict
+        Configuração do modelo contendo:
+        - context_length (int)
+        - patch_length (int)
+        - num_input_channels (int)
+        - prediction_length (int)
+        - d_model (int)
+        - num_attention_heads (int)
+        - num_hidden_layers (int)
+        - ffn_dim (int)
+        - dropout (float)
+        - E outros parâmetros do PatchTSTConfig
+    training_config : dict
+        Configuração de treinamento contendo:
+        - learning_rate (float)
+        - num_epochs (int)
+        - batch_size (int)
+        - num_workers (int)
+        - early_stopping_patience (int, opcional)
+        - early_stopping_threshold (float, opcional)
+        - E outros parâmetros do TrainingArguments
+    device : torch.device
+        Dispositivo para treino (cuda ou cpu)
+    dtype : torch.dtype
+        Tipo de dados (float32, float16, bfloat16)
+    context_length : int
+        Tamanho da janela temporal de entrada
+    timestamp_column : str
+        Nome da coluna com timestamps
+    model_name : str
+        Nome do modelo (para visualizações)
+    output_dir : str
+        Diretório para salvar checkpoints
+    callbacks : list, opcional
+        Lista de callbacks customizados (além do early stopping)
+    verbose : bool
+        Se True, imprime progresso detalhado
+
+    Retorna:
+    --------
+    dict com chaves:
+        - 'model': Modelo treinado
+        - 'trainer': Trainer do HF
+        - 'train_result': Resultado do treinamento
+        - 'eval_result': Resultado da validação
+        - 'test_metrics': Métricas no conjunto de teste
+        - 'forecast_dates': Datas das previsões
+        - 'predictions': Previsões desnormalizadas
+        - 'labels': Rótulos desnormalizados
+    """
+    pass
