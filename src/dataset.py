@@ -8,8 +8,8 @@ from tsfm_public.toolkit.dataset import ForecastDFDataset
 from config import BTC_DATA_FILE
 
 # Constantes
-WINDOW_WEEKLY = 5
-WINDOW_MONTHLY = 22
+WINDOW_WEEKLY = 7
+WINDOW_MONTHLY = 30
 
 
 class RepositorioDados:

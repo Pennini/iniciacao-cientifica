@@ -146,7 +146,7 @@ def evaluate_and_visualize(
     plt.tight_layout()
     plt.show()
 
-    return forecast_dates, metrics
+    return forecast_dates, metrics, labels_1, preds_1
 
 
 def train_and_evaluate_patchtst(

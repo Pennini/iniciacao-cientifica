@@ -19,14 +19,11 @@ from config import (
     Y_TRAIN_FILE,
     Y_TEST_FILE,
 )
-from config import (
-    HAR_PRED_FILE,
-    HAR_METRICS_FILE,
-    FEATURES
-)
+from config import HAR_PRED_FILE, HAR_METRICS_FILE, FEATURES
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
-class HarModel():
+
+class HarModel:
     def __init__(self) -> None:
         self.model = LinearRegression()
 
@@ -34,12 +31,10 @@ class HarModel():
         self.train(X_train, y_train)
 
         y_pred_train = self.predict(X_train)
-        y_pred_test  = self.predict(X_test)
+        y_pred_test = self.predict(X_test)
 
         self.evaluate_and_visualize(
-            y_train, y_pred_train,
-            y_test, y_pred_test,
-            test_dates=test_dates
+            y_test, y_pred_test, test_dates=test_dates
         )
 
         return y_pred_test
@@ -55,7 +50,7 @@ class HarModel():
 
     def predict(self, X):
         return self.model.predict(X)
-    
+
     def evaluate(self, y_true, y_pred):
         mse = mean_squared_error(y_true, y_pred)
         mae = mean_absolute_error(y_true, y_pred)
@@ -64,18 +59,53 @@ class HarModel():
         return mse, mae, rmse, mape
 
     def visualize_predictions(self, dates, y_true, y_pred):
-        plt.figure(figsize=(12, 6))
-        plt.plot(dates, y_true, label="True Values", color="blue")
-        plt.plot(dates, y_pred, label="Predicted Values", color="red", linestyle="--")
-        plt.title("HAR: True vs Predicted Values")
-        plt.xlabel("Date")
-        plt.ylabel("Target Value")
-        plt.legend()
-        plt.grid()
+        # Configuração do estilo para paper
+        plt.style.use("seaborn-v0_8-paper")
+
+        fig, ax = plt.subplots(figsize=(10, 5), dpi=300)
+
+        # Plotar dados com cores profissionais
+        ax.plot(
+            dates, y_true, label="Observado", color="blue", linewidth=1.5, alpha=0.8
+        )
+        ax.plot(
+            dates,
+            y_pred,
+            label="Predito",
+            color="red",
+            linewidth=1.5,
+            linestyle="--",
+            alpha=0.9,
+        )
+
+        # Labels e título
+        ax.set_xlabel("Data", fontsize=11, fontweight="normal")
+        ax.set_ylabel("Volatilidade Realizada", fontsize=11, fontweight="normal")
+
+        # Legenda
+        ax.legend(
+            loc="best",
+            frameon=True,
+            framealpha=0.95,
+            edgecolor="gray",
+            fontsize=10,
+            fancybox=False,
+        )
+
+        # Remover spines superiores e direitas
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+        # Melhorar os ticks
+        ax.tick_params(axis="both", which="major", labelsize=9)
+
+        # Formatar eixo Y para notação científica padronizada
+        ax.ticklabel_format(style="scientific", axis="y", scilimits=(0, 0))
+
+        # Ajustar espaçamento
         plt.tight_layout()
         plt.show()
 
-    
     def salvar_resultados(self, y_true, y_pred):
         df_results = pd.DataFrame(
             {
@@ -100,23 +130,13 @@ class HarModel():
         print(f"Métricas salvas em: {HAR_METRICS_FILE}")
 
         return True
-    
+
     def evaluate_and_visualize(
-        self,
-        y_train, y_pred_train,
-        y_test, y_pred_test,
-        test_dates=None
+        self, y_test, y_pred_test, test_dates=None
     ):
-        train_mse, train_mae, train_rmse, train_mape = self.evaluate(y_train, y_pred_train)
         test_mse, test_mae, test_rmse, test_mape = self.evaluate(y_test, y_pred_test)
 
         print("\n=== AVALIAÇÃO FINAL - LinearRegression (HAR) ===")
-        print("TREINO:")
-        print(f"  MSE: {train_mse:.6e}")
-        print(f"  MAE: {train_mae:.6e}")
-        print(f"  RMSE: {train_rmse:.6e}")
-        print(f"  MAPE: {train_mape:.6e}")
-
         print("\nTESTE:")
         print(f"  MSE: {test_mse:.6e}")
         print(f"  MAE: {test_mae:.6e}")
@@ -128,18 +148,29 @@ class HarModel():
             print("\nVisualizando previsões no conjunto de teste...")
             self.visualize_predictions(test_dates, y_test, y_pred_test)
 
-    
+        metrics = {
+            "MSE": test_mse,
+            "RMSE": test_rmse,
+            "MAE": test_mae,
+            "MAPE": test_mape
+        }
+
+        return metrics, y_test, y_pred_test
+
     def main(self, verbose=True):
         self.carregar_dados()
         self.train(self.X_train, self.y_train)
         y_pred_train = self.predict(self.X_train)
         y_pred_test = self.predict(self.X_test)
-        
+
         if verbose:
-            self.evaluate_and_visualize(self.y_train, y_pred_train, self.y_test, y_pred_test)
+            self.evaluate_and_visualize(
+                self.y_test, y_pred_test
+            )
         self.salvar_resultados(self.y_test, y_pred_test)
 
         return True
+
 
 if __name__ == "__main__":
     har_model = HarModel()
