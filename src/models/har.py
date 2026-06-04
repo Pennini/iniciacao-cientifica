@@ -13,14 +13,27 @@ np.random.seed(RANDOM_STATE)
 # Adiciona o diretório raiz ao path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config import (
-    X_TRAIN_FILE,
-    X_TEST_FILE,
-    Y_TRAIN_FILE,
-    Y_TEST_FILE,
-)
-from config import HAR_PRED_FILE, HAR_METRICS_FILE, FEATURES
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+try:
+    from ..config import (
+        X_TRAIN_FILE,
+        X_TEST_FILE,
+        Y_TRAIN_FILE,
+        Y_TEST_FILE,
+        HAR_PRED_FILE,
+        HAR_METRICS_FILE,
+        FEATURES,
+    )
+except ImportError:  # Compatibilidade para execução direta
+    from config import (  # type: ignore
+        X_TRAIN_FILE,
+        X_TEST_FILE,
+        Y_TRAIN_FILE,
+        Y_TEST_FILE,
+        HAR_PRED_FILE,
+        HAR_METRICS_FILE,
+        FEATURES,
+    )
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 
 class HarModel:

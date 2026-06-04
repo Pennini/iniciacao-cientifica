@@ -5,7 +5,10 @@ import numpy as np
 from tsfm_public.toolkit.time_series_preprocessor import TimeSeriesPreprocessor
 from tsfm_public.toolkit.dataset import ForecastDFDataset
 
-from config import BTC_DATA_FILE
+try:
+    from .config import BTC_DATA_FILE
+except ImportError:  # Compatibilidade para execução direta (ex.: notebooks antigos)
+    from config import BTC_DATA_FILE
 
 # Constantes
 WINDOW_WEEKLY = 7
@@ -27,61 +30,56 @@ class RepositorioDados:
         file_path: str = BTC_DATA_FILE,
     ):
         """Orquestra o pipeline completo de preparação de dados."""
-        try:
-            self._validate_fracs(train_frac, valid_frac)
+        self._validate_fracs(train_frac, valid_frac)
 
-            df = self.load_and_prepare_data(file_path, timestamp_col)
-            data, features = self.build_features(
-                df,
-                timestamp_col,
-                use_mean_features,
-                lags,
-            )
+        df = self.load_and_prepare_data(file_path, timestamp_col)
+        data, features = self.build_features(
+            df,
+            timestamp_col,
+            use_mean_features,
+            lags,
+        )
 
-            train_df, valid_df, test_df, tsp = self.split_and_preprocess(
-                data,
-                timestamp_col,
-                target_col,
-                id_columns,
-                features,
-                train_frac,
-                valid_frac,
-                context_length,
-            )
+        train_df, valid_df, test_df, tsp = self.split_and_preprocess(
+            data,
+            timestamp_col,
+            target_col,
+            id_columns,
+            features,
+            train_frac,
+            valid_frac,
+            context_length,
+        )
 
-            train_ds = self.make_dataset(
-                train_df,
-                tsp,
-                id_columns,
-                timestamp_col,
-                target_col,
-                context_length,
-                forecast_horizon,
-            )
-            valid_ds = self.make_dataset(
-                valid_df,
-                tsp,
-                id_columns,
-                timestamp_col,
-                target_col,
-                context_length,
-                forecast_horizon,
-            )
-            test_ds = self.make_dataset(
-                test_df,
-                tsp,
-                id_columns,
-                timestamp_col,
-                target_col,
-                context_length,
-                forecast_horizon,
-            )
+        train_ds = self.make_dataset(
+            train_df,
+            tsp,
+            id_columns,
+            timestamp_col,
+            target_col,
+            context_length,
+            forecast_horizon,
+        )
+        valid_ds = self.make_dataset(
+            valid_df,
+            tsp,
+            id_columns,
+            timestamp_col,
+            target_col,
+            context_length,
+            forecast_horizon,
+        )
+        test_ds = self.make_dataset(
+            test_df,
+            tsp,
+            id_columns,
+            timestamp_col,
+            target_col,
+            context_length,
+            forecast_horizon,
+        )
 
-            return tsp, train_ds, valid_ds, test_ds, train_df, valid_df, test_df
-
-        except Exception as e:
-            print(f"Erro ao processar dados: {e}")
-            raise
+        return tsp, train_ds, valid_ds, test_ds, train_df, valid_df, test_df
 
     def load_and_prepare_data(self, file_path: str, timestamp_col) -> pd.DataFrame:
         """
@@ -296,11 +294,11 @@ class RepositorioDados:
 
         return infos
 
-    def save_datasets(self, *kwargs) -> None:
+    def save_datasets(self, datasets) -> None:
         """Salva datasets em arquivos CSV."""
         print("Salvando datasets")
 
-        for data, (path, idx) in kwargs:
+        for data, path, idx in datasets:
             data.to_csv(path, index=idx)
 
         print("Datasets salvos com sucesso")
@@ -317,4 +315,12 @@ class RepositorioDados:
 
 if __name__ == "__main__":
     rep = RepositorioDados()
-    rep.executar()
+    rep.executar(
+        timestamp_col="timestamp",
+        train_frac=0.7,
+        valid_frac=0.1,
+        context_length=512,
+        target_col=["Vol"],
+        id_columns=[],
+        forecast_horizon=96,
+    )

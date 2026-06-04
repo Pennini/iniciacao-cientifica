@@ -5,6 +5,7 @@ PROJ_ROOT = Path(__file__).parent.parent.resolve()
 
 DATA_DIR = PROJ_ROOT / "data"
 MODEL_DIR = PROJ_ROOT / "models"
+PATCHTST_DIR = MODEL_DIR / "patchtst"
 LOGS_DIR = PROJ_ROOT / "logs"
 SRC_DIR = PROJ_ROOT / "src"
 
@@ -41,6 +42,16 @@ ID_COLUMNS = []
 CONTEXT_LENGTH_IBM = 512
 FORECAST_HORIZON_IBM = 96
 
+# PatchTST "Scratch" (notebook "8. Ajuste Scratch") — valores que reproduzem o gráfico do notebook
+CONTEXT_LENGTH = 256
+FORECAST_HORIZON = 1
+D_MODEL = 64
+NUM_ATTENTION_HEADS = 16
+NUM_HIDDEN_LAYERS = 2
+FFN_DIM = 128
+DROPOUT = 0.05
+SCALING = "std"  # default do PatchTSTConfig; o notebook NÃO passa scaling, então cai no "std"
+
 TRAIN_FRAC, VALID_FRAC = 0.7, 0.1
 
 # Hyperparâmetros do modelo
@@ -48,10 +59,18 @@ PATCH_LENGTH = 1
 BATCH_SIZE = 32
 NUM_WORKERS = 0
 EPOCHS = 50
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 5e-4
 
 def ensure_directories():
-    for dir in [DATA_DIR, MODEL_DIR, LOGS_DIR, RAW_DATA_DIR, PROCESSED_DATA_DIR]:
+    for dir in [
+        DATA_DIR,
+        MODEL_DIR,
+        PATCHTST_DIR,
+        LOGS_DIR,
+        RAW_DATA_DIR,
+        INTERIM_DATA_DIR,
+        PROCESSED_DATA_DIR,
+    ]:
         dir.mkdir(parents=True, exist_ok=True)
 
 if __name__ == "__main__":
